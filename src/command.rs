@@ -483,7 +483,7 @@ impl Context {
         Ok(())
     }
 
-    fn process_file(&mut self, file_path: Token, diag: &mut impl Diagnoster) -> Option<()> {
+    fn process_file(&mut self, file_path: Token, diag: &mut impl Diagnoster, remove: bool) -> Option<()> {
         let source = match fs::read_to_string(&file_path.text) {
             Ok(source) => source,
             Err(err) => {
@@ -493,7 +493,21 @@ impl Context {
         };
         let mut lexer = Lexer::new(source.chars().collect(), Some(file_path.text));
         while lexer.peek_token().kind != TokenKind::End {
-            self.process_command(Command::parse(&mut lexer, diag)?, diag)?
+            match Command::parse(&mut lexer, diag)? {
+                Command::DefineRule { name, rule }  => {
+                    if remove && get_item_by_key(&self.rules, &name).is_some() {
+                        self.process_command(Command::DeleteRule(name.loc.clone(), name.clone()), diag)?;
+                    }
+                    self.process_command(Command::DefineRule { name, rule }, diag)?
+                },
+                Command::DefineRuleViaShaping { name, expr } => {
+                    if remove && get_item_by_key(&self.rules, &name).is_some() {
+                        self.process_command(Command::DeleteRule(name.loc.clone(), name.clone()), diag)?;
+                    }
+                    self.process_command(Command::DefineRuleViaShaping { name, expr }, diag)?
+                },
+                command => self.process_command(command, diag)?
+            }
         }
         Some(())
     }
@@ -503,7 +517,7 @@ impl Context {
             Command::Load(file_path) => {
                 let saved_interactive = self.interactive;
                 self.interactive = false;
-                self.process_file(file_path, diag)?;
+                self.process_file(file_path, diag, false)?;
                 self.interactive = saved_interactive;
             }
             Command::DefineRule{ name, rule } => {
