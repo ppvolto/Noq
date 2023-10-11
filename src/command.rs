@@ -168,6 +168,15 @@ pub enum Command {
     ///   ...
     /// ```
     Load(Token),
+    /// Reload file
+    ///
+    /// ```noq
+    /// reload "std/std.noq" # <- the reload command
+    ///
+    /// (a - a) + b {
+    ///   ...
+    /// ```
+    Reload(Token),
     /// Save file
     ///
     /// ```noq
@@ -196,6 +205,13 @@ impl Command {
                     diag.report(&actual_token.loc, Severity::Error, &format!("`load` command expects {expected_kind} as the file path, but got {actual_token} instead", actual_token = actual_token.report()));
                 }).ok()?;
                 Some(Self::Load(token))
+            },
+            TokenKind::Reload => {
+                lexer.next_token();
+                let token = lexer.expect_token(TokenKind::Str).map_err(|(expected_kind, actual_token)| {
+                    diag.report(&actual_token.loc, Severity::Error, &format!("`load` command expects {expected_kind} as the file path, but got {actual_token} instead", actual_token = actual_token.report()));
+                }).ok()?;
+                Some(Self::Reload(token))
             },
             TokenKind::Save => {
                 lexer.next_token();
@@ -518,6 +534,12 @@ impl Context {
                 let saved_interactive = self.interactive;
                 self.interactive = false;
                 self.process_file(file_path, diag, false)?;
+                self.interactive = saved_interactive;
+            }
+            Command::Reload(file_path) => {
+                let saved_interactive = self.interactive;
+                self.interactive = false;
+                self.process_file(file_path, diag, true)?;
                 self.interactive = saved_interactive;
             }
             Command::DefineRule{ name, rule } => {
